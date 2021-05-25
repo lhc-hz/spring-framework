@@ -266,13 +266,14 @@ class ConfigurationClassParser {
 	protected final SourceClass doProcessConfigurationClass(
 			ConfigurationClass configClass, SourceClass sourceClass, Predicate<String> filter)
 			throws IOException {
-
+		// 解析 @Component 注解的类，这里面会递归执行到 @Component注解的类里面是否还有注解类
 		if (configClass.getMetadata().isAnnotated(Component.class.getName())) {
 			// Recursively process any member (nested) classes first
 			processMemberClasses(configClass, sourceClass, filter);
 		}
 
 		// Process any @PropertySource annotations
+		// 解析 @PropertySources 注解的类
 		for (AnnotationAttributes propertySource : AnnotationConfigUtils.attributesForRepeatable(
 				sourceClass.getMetadata(), PropertySources.class,
 				org.springframework.context.annotation.PropertySource.class)) {
@@ -286,12 +287,15 @@ class ConfigurationClassParser {
 		}
 
 		// Process any @ComponentScan annotations
+		// 解析 @ComponentScans @ComponentScan 注解的类
 		Set<AnnotationAttributes> componentScans = AnnotationConfigUtils.attributesForRepeatable(
 				sourceClass.getMetadata(), ComponentScans.class, ComponentScan.class);
 		if (!componentScans.isEmpty() &&
 				!this.conditionEvaluator.shouldSkip(sourceClass.getMetadata(), ConfigurationPhase.REGISTER_BEAN)) {
 			for (AnnotationAttributes componentScan : componentScans) {
 				// The config class is annotated with @ComponentScan -> perform the scan immediately
+				//这里会扫描 ComponentScans basePackages 定义的包下面的所有类是否有被 @Component 修饰
+				// 将ComponentScans basePackages 定义的包下面的所有被 @Component 修饰的类都解析过来
 				Set<BeanDefinitionHolder> scannedBeanDefinitions =
 						this.componentScanParser.parse(componentScan, sourceClass.getMetadata().getClassName());
 				// Check the set of scanned definitions for any further config classes and parse recursively if needed
@@ -308,6 +312,7 @@ class ConfigurationClassParser {
 		}
 
 		// Process any @Import annotations
+		// 解析 @Import注解，spring boot 自动注入大量的用到了这玩意儿
 		processImports(configClass, sourceClass, getImports(sourceClass), filter, true);
 
 		// Process any @ImportResource annotations
@@ -323,12 +328,38 @@ class ConfigurationClassParser {
 		}
 
 		// Process individual @Bean methods
+		//解析@Bean注解
+		// 这里有个问题
+		/**
+			 //1、@Configuration
+			 //2、@Component
+			 public class PersonConfiguration1 {
+
+				@Bean
+				private PersonConfiguration2 personConfiguration2(){
+					return new PersonConfiguration2();
+				}
+			}
+		 	这里这段代码不论是用 1、@Configuration 还是用 2、@Component 最后得到的 PersonConfiguration2 都是单例的
+		    但是使用 1、@Configuration 注解的 PersonConfiguration1 会被注入成一个代理类
+		 	所以网上说的使用 @Configuration 配置的类必须要被代理是为了解决 bean 的单例问题肯定是错的
+		    不论是用 @Configuration 还是用 2、@Component 里面定义的 @Bean 注解最终都是走的 FactoryMethod 方法被实例化的
+		 * **/
 		Set<MethodMetadata> beanMethods = retrieveBeanMethodMetadata(sourceClass);
 		for (MethodMetadata methodMetadata : beanMethods) {
 			configClass.addBeanMethod(new BeanMethod(methodMetadata, configClass));
 		}
 
 		// Process default methods on interfaces
+		/**
+			 public interface MyInterfaces {
+
+				@Bean
+				PersonConfiguration1 personConfiguration1();
+
+			}
+		 * **/
+		// 如果接口中也定义有@Bean 则走这里解析
 		processInterfaces(configClass, sourceClass);
 
 		// Process superclass, if any

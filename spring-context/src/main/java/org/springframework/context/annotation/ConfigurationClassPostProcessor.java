@@ -264,17 +264,34 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 	 * {@link Configuration} classes.
 	 */
 	public void processConfigBeanDefinitions(BeanDefinitionRegistry registry) {
-		List<BeanDefinitionHolder> configCandidates = new ArrayList<>();
-		String[] candidateNames = registry.getBeanDefinitionNames();
 
+		//遍历之后所有需要处理的BeanDefinition放在这里
+		List<BeanDefinitionHolder> configCandidates = new ArrayList<>();
+
+		// 这里 registry.getBeanDefinitionNames() 这个方法需要重点讲解
+		// 这里获取到的实际上是 DefaultListableBeanFactory 里面的 BeanDefinitionNames
+		// 那么问题来了 DefaultListableBeanFactory 里面的 BeanDefinitionNames是哪里来的呢
+		// 答案是 <context:component-scan base-package="com.spring.debug.beanPostProcess"></context:component-scan> 这个注解扫描到的
+		// 那么问题又来了既然 context:component-scan 这个注解可以扫描到那么还要 ConfigurationClassPostProcessor干啥
+		// 答案是 <context:component-scan 这个注解只会扫描到  base-package 这个包下面的类中定义了有 @Component 这个注解的类
+		// 包括 @Component @Configuration @Controller @Service 等包括有 @Component 这个注解的的注解类
+		// 并且如果包含了 @Component 这个注解的类里面定义了其他的注解类 <context:component-scan 这个标签也不会扫描到
+		// 因此 ConfigurationClassPostProcessor 处理的是 <context:component-scan处理不到的类,即注解类里面嵌套的注解类
+		String[] candidateNames = registry.getBeanDefinitionNames();
 		for (String beanName : candidateNames) {
 			BeanDefinition beanDef = registry.getBeanDefinition(beanName);
+			//这里根据 beanDef 里面是否有  configurationClass 这个标记来判断 此beanDef 是否已经被处理过了
 			if (beanDef.getAttribute(ConfigurationClassUtils.CONFIGURATION_CLASS_ATTRIBUTE) != null) {
 				if (logger.isDebugEnabled()) {
 					logger.debug("Bean definition has already been processed as a configuration class: " + beanDef);
 				}
 			}
+			//这个方法有意思的
+			//首先判断了下 beanDef 的类型
+			//其次判断了下 beanDef 上有没有 @Configuration注解，如果有设置 configurationClass为 full,否则设置为lite
+			//如果为 full 这在创建对象时则创建代理对象, 否则则走spring正常创建对象的逻辑，具体逻辑可以看 postProcessBeanFactory
 			else if (ConfigurationClassUtils.checkConfigurationClassCandidate(beanDef, this.metadataReaderFactory)) {
+				//这里将 beanDef 包装成 BeanDefinitionHolder并加入到
 				configCandidates.add(new BeanDefinitionHolder(beanDef, beanName));
 			}
 		}
@@ -310,16 +327,23 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 		}
 
 		// Parse each @Configuration class
+		//这里创建了一个解析具体bean标签的处理类
 		ConfigurationClassParser parser = new ConfigurationClassParser(
 				this.metadataReaderFactory, this.problemReporter, this.environment,
 				this.resourceLoader, this.componentScanBeanNameGenerator, registry);
 
+		//所有解析到的 BeanDefinition定义信息放到 candidates 中
 		Set<BeanDefinitionHolder> candidates = new LinkedHashSet<>(configCandidates);
+
+		//所有已经放到BeanFactory的BeanDefinition定义信息放到  alreadyParsed 中
 		Set<ConfigurationClass> alreadyParsed = new HashSet<>(configCandidates.size());
 		do {
+			//具体解析标签的类
 			parser.parse(candidates);
 			parser.validate();
 
+			// 解析完成的 BeanDefinition定义信息 先放到 parser.getConfigurationClasses()
+			// 然后再放到 configClasses
 			Set<ConfigurationClass> configClasses = new LinkedHashSet<>(parser.getConfigurationClasses());
 			configClasses.removeAll(alreadyParsed);
 
@@ -329,6 +353,7 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 						registry, this.sourceExtractor, this.resourceLoader, this.environment,
 						this.importBeanNameGenerator, parser.getImportRegistry());
 			}
+			//将解析到的 BeanDefinition定义信息放到 BeanFactory中
 			this.reader.loadBeanDefinitions(configClasses);
 			alreadyParsed.addAll(configClasses);
 
