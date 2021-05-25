@@ -1,9 +1,16 @@
 package com.spring.debug.beanPostProcess;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.PropertySource;
+
+@Configuration
+/*@PropertySource(value = "classpath:params.properties")*/
 public class Person {
 
 	private Integer id;
 
+	@Value("${name}")
 	private String name;
 
 	public Integer getId() {

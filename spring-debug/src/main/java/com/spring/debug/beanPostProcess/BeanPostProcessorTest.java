@@ -9,5 +9,9 @@ public class BeanPostProcessorTest {
 
 		ApplicationContext applicationContext = new ClassPathXmlApplicationContext("applicationContext.xml");
 
+		Person person = applicationContext.getBean(Person.class);
+
+		System.out.println(person);
+
 	}
 }
