@@ -1,19 +1,20 @@
-package com.spring.debug.beanPostProcess;
+package com.spring.debug.supplier;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.stereotype.Component;
 
-//@Configuration
-@PropertySource(value = "classpath:params.properties")
-@Component
 public class Person {
 
 	private Integer id;
 
-	@Value("${name}")
 	private String name;
+
+	public Person(){}
+
+	public Person(String name){
+		this.name = name;
+	}
 
 	public Integer getId() {
 		return id;
